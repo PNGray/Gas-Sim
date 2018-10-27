@@ -9,21 +9,18 @@
 
 const double dt = 0.001;
 const double dthalf = dt / 2;
-int count_len(FILE *file){
+int count_len(FILE *file, double &size){
   double dump;
+  double dump2 = 0;
   int scan_result = 0, count = 0;
   while (true){
-    fscanf(file, "%lf", &dump);
-    fscanf(file, "%lf", &dump);
-    fscanf(file, "%lf", &dump);
-    fscanf(file, "%lf", &dump);
-    fscanf(file, "%lf", &dump);
-    fscanf(file, "%lf", &dump);
-    scan_result = fscanf(file, "%lf", &dump);
-    if (scan_result != EOF){
+    scan_result = fscanf(file, "%lf %lf %lf %lf %lf %lf %lf", &dump2, &dump, &dump, &dump, &dump, &dump, &dump);
+    if (scan_result == 7){
+      dump2 = 0;
       count++;
     }
     else {
+      if (dump2 != 0) size = dump2;
       break;
     }
   }
@@ -65,7 +62,7 @@ int main(int argc, char **argv){
   FILE *outfile = strncmp(outfilename, "stdout", 10) == 0 ? stdout :
     (strncmp(outfilename, "null", 5) == 0 ? nullptr : fopen(outfilename, "w"));
   FILE *kinetic = fopen("kinetic.txt", "w");
-  int n = count_len(infile);
+  int n = count_len(infile, size);
 
   V3d ps[n];
   V3d vs[n];
@@ -91,7 +88,7 @@ int main(int argc, char **argv){
   // sLink box[blen];
   sLink pss[n];
   init_ps_links(pss, n);
-  generate(ps, vs, ms, infile);
+  generate(ps, vs, ms, n, infile);
   init_grid(box, pss, ps, zone, b_side, gridsize, origin, n);
 
   for (int i = 0; i <= num_step; i++){
@@ -136,8 +133,10 @@ int main(int argc, char **argv){
         f = 50000 * (bound - z) / z * p->z;
         as[i].z += f;
         double len = vs[i].len();
-        V3d dv = (env_vel - len) * conduct * vs[i];
-        vs[i].add(dv);
+        if (ps[i].z < 0){
+          V3d dv = (env_vel - len) * conduct * vs[i];
+          vs[i].add(dv);
+        }
       }
       // vs[i].mul(1.00005);
     }
@@ -192,10 +191,12 @@ int main(int argc, char **argv){
   fclose(infile);
   FILE *savefile = strncmp(savefilename, "stdout", 10) == 0 ? stdout :
     (strncmp(savefilename, "null", 5) == 0 ? nullptr : fopen(savefilename, "w"));
-  if (savefile != nullptr)
+  if (savefile != nullptr) {
     for (int i = 0; i < n; i++){
       V3d *p = ps + i;
       V3d *v = vs + i;
       fprintf(savefile, "%.15lf %.15lf %.15lf %.15lf %.15lf %.15lf %.15lf\n", p->x, p->y, p->z, v->x, v->y, v->z, ms[i]);
     }
+    fprintf(savefile, "%.15lf\n", size);
+  }
 }

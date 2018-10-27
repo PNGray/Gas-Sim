@@ -148,11 +148,11 @@ bool iV3d::operator==(iV3d &v){
   return x == v.x && y == v.y && z == v.z;
 }
 
-int generate(V3d* ps, V3d* vs, double* ms, FILE *file){
+int generate(V3d* ps, V3d* vs, double* ms, double n, FILE *file){
   double x, y, z, vx, vy, vz, m;
   V3d *p, *v;
   int scan_result = 0, index = 0;
-  while (true){
+  for (int i = 0; i < n; i++){
     fscanf(file, "%lf", &x);
     fscanf(file, "%lf", &y);
     fscanf(file, "%lf", &z);
@@ -160,7 +160,6 @@ int generate(V3d* ps, V3d* vs, double* ms, FILE *file){
     fscanf(file, "%lf", &vy);
     fscanf(file, "%lf", &vz);
     scan_result = fscanf(file, "%lf", &m);
-    if (scan_result != EOF){
       p = ps + index;
       v = vs + index;
       p->x = x;
@@ -171,10 +170,6 @@ int generate(V3d* ps, V3d* vs, double* ms, FILE *file){
       v->z = vz;
       ms[index] = m;
       index++;
-    }
-    else {
-      break;
-    }
   }
   return index;
 }

@@ -46,7 +46,7 @@ public:
 
 V3d operator*(double, V3d&);
 
-int generate(V3d*, V3d*, double*, FILE*);
+int generate(V3d*, V3d*, double*, double, FILE*);
 
 class iV3d{
 public:
