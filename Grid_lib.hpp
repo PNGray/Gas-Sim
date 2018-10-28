@@ -10,16 +10,9 @@ const double thresh = pow(20, 2) * r02;
 const double m = 1;
 int getzone(V3d &pos, iV3d &b_side, double gridsize, V3d &origin){
   V3d v = pos - origin;
-  int max_index = b_side.y - 1;
   int x = (int)(v.x / gridsize);
   int y = (int)(v.y / gridsize);
   int z = (int)(v.z / gridsize);
-  if (x > max_index) x = max_index;
-  if (x < 0) x = 0;
-  if (y > max_index) y = max_index;
-  if (y < 0) y = 0;
-  if (z > max_index) z = max_index;
-  if (z < 0) z = 0;
   return x * b_side.x + y * b_side.y + z;
 }
 
@@ -34,9 +27,11 @@ void check_grid(sLink *box, V3d *pos, int *zone, iV3d &b_side, double gridsize, 
       if (correct_zone != zone[tag]){
         zone[tag] = correct_zone;
         target = current->remove_next();
-        #pragma omp critical
-        {
-          box[correct_zone].add(target);
+        if (correct_zone >=0 && correct_zone <b_side.z){
+          #pragma omp critical
+          {
+            box[correct_zone].add(target);
+          }
         }
       }
       current = current->next;
@@ -80,12 +75,11 @@ double kinetic_energy(V3d *vs, int n){
   return ke;
 }
 
-double energy(V3d *ps, V3d *vs, int n, double gridsize){
-  double e = 0;
+double potential_energy(V3d *ps, int n, double gridsize){
+  double pe = 0;
   double r2;
   V3d dist;
   for (int i = 0; i < n; i++){
-    e += 0.5 * m * (vs + i)->lensqr();
     #pragma omp parallel for private(r2, dist)
     for (int j = 0; j < n; j++){
       if (i != j) {
@@ -93,12 +87,12 @@ double energy(V3d *ps, V3d *vs, int n, double gridsize){
         r2 = dist.lensqr();
         #pragma omp critical
         {
-          e += V(r2, gridsize);
+          pe += V(r2, gridsize);
         }
       }
     }
   }
-  return e;
+  return pe;
 }
 void gas_force(V3d &p1, V3d &p2, V3d &a, int &num_inter, double gridsize){
   V3d r = p1 - p2;

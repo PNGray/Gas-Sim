@@ -49,7 +49,7 @@ int main(int argc, char **argv){
     printf("infile outfile savefile pad size numstep numthreads\n");
     return 0;
   }
-
+  //inputs variables
   char* infilename = argv[1];
   char* outfilename = argv[2];
   char* savefilename = argv[3];
@@ -58,35 +58,46 @@ int main(int argc, char **argv){
   int num_step = atoi(argv[6]);
   omp_set_num_threads(atoi(argv[7]));
 
+  //file io
   FILE *infile = fopen(infilename, "r");
   FILE *outfile = strncmp(outfilename, "stdout", 10) == 0 ? stdout :
     (strncmp(outfilename, "null", 5) == 0 ? nullptr : fopen(outfilename, "w"));
   FILE *kinetic = fopen("kinetic.txt", "w");
-  int n = count_len(infile, size);
 
+  //particle variables
+  int n = count_len(infile, size);
   V3d ps[n];
   V3d vs[n];
   V3d as[n];
-  int num_inter[n];
-  bool color = false;
-  int blob = 5;
-  V3d origin(-size / 2);
-  double gravity = -0.1;
   double ms[n];
-  double e = 0;
+  int num_inter[n];
   int zone[n];
 
+  //color variables
+  bool color = false;
+  int blob = 5;
+
+  //environment variable
+  double gravity = -0.1;
+  double e = 0;
+  double conduct = 0.025;
+  double env_vel = 1.5;
+  double last_ke = 0;
+  double current_ke = 0;
+  double pe = 0;
+
+  //box variables
+  V3d origin(-size / 2);
   int side = (int)(size / pad / r0);
   iV3d b_side(side * side, side, side * side * side);
   int blen = side * side * side;
   double gridsize = size / side;
   double bound = (size - gridsize) / 2.0;
-  double conduct = 0.05;
-  double env_vel = 1.5;
-
   sLink *box = new sLink[blen];
   // sLink box[blen];
   sLink pss[n];
+
+  //initialization
   init_ps_links(pss, n);
   generate(ps, vs, ms, n, infile);
   init_grid(box, pss, ps, zone, b_side, gridsize, origin, n);
@@ -109,26 +120,24 @@ int main(int argc, char **argv){
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
-      as[i].z += gravity;
       V3d *p = ps + i;
       double x = fabs(p->x);
       double y = fabs(p->y);
       double z = fabs(p->z);
       double f;
+
+      as[i].z += gravity;
+
       if (x > bound){
         f = 50000 * (bound - x) / x * p->x;
         as[i].x += f;
-        // double len = vs[i].len();
-        // V3d dv = (env_vel - len) * conduct * vs[i];
-        // vs[i].add(dv);
       }
+
       if (y > bound){
         f = 50000 * (bound - y) / y * p->y;
         as[i].y += f;
-        // double len = vs[i].len();
-        // V3d dv = (env_vel - len) * conduct * vs[i];
-        // vs[i].add(dv);
       }
+
       if (z > bound){
         f = 50000 * (bound - z) / z * p->z;
         as[i].z += f;
@@ -138,7 +147,6 @@ int main(int argc, char **argv){
           vs[i].add(dv);
         }
       }
-      // vs[i].mul(1.00005);
     }
 
 
@@ -149,8 +157,6 @@ int main(int argc, char **argv){
       as[i].reset();
     }
 
-    fprintf(kinetic, "%f %f\n", t, kinetic_energy(vs, n));
-
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d d = dthalf * vs[i];
@@ -158,7 +164,12 @@ int main(int argc, char **argv){
     }
 
     if (i % 100 == 0){
-      // if (i % 200 == 0) e = energy(ps, vs, n, gridsize);
+      // pe = potential_energy(ps, n, gridsize);
+      current_ke= kinetic_energy(vs, n);
+      e = current_ke + pe;
+      fprintf(kinetic, "%f %f %f %f\n", t, current_ke, e, current_ke - last_ke);
+      last_ke = current_ke;
+
       printf("%d\n", i);
       if (outfile == nullptr) continue;
       for (int j = 0; j < n; j++){
@@ -189,6 +200,8 @@ int main(int argc, char **argv){
     }
   }
   fclose(infile);
+
+  //saving current condition to file
   FILE *savefile = strncmp(savefilename, "stdout", 10) == 0 ? stdout :
     (strncmp(savefilename, "null", 5) == 0 ? nullptr : fopen(savefilename, "w"));
   if (savefile != nullptr) {
