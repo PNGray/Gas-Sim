@@ -16,9 +16,9 @@ int getzone(V3d &pos, iV3d &b_side, double gridsize, V3d &origin){
   return x * b_side.x + y * b_side.y + z;
 }
 
-void check_grid(sLink *box, V3d *pos, int *zone, iV3d &b_side, double gridsize, V3d &origin, int blen){
+void check_grid(sLink *box, V3d *pos, int *zone, iV3d &b_side, double gridsize, V3d &origin){
   #pragma omp parallel for
-  for (int i = 0; i < blen; i++){
+  for (int i = 0; i < b_side.z; i++){
     sLink *current = box + i;
     sLink *target;
     while (current->next != nullptr) {
@@ -67,10 +67,16 @@ double V(double r2, double gridsize){
   return (4 * r0 * (1 / r6 / r6) - 1 / r6);
 }
 
-double kinetic_energy(V3d *vs, int n){
+double temperature(V3d *vs, int n){
   double ke = 0;
+  V3d avg_v(0);
   for (int i = 0; i < n; i++){
-    ke += 0.5 * m * (vs + i)->lensqr();
+    avg_v.add(*(vs + i));
+  }
+  avg_v.div(n);
+  for (int i = 0; i < n; i++){
+    V3d rel_v = *(vs + i) - avg_v;
+    ke += 0.5 * m * rel_v.lensqr();
   }
   return ke;
 }

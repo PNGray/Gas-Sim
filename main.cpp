@@ -20,7 +20,7 @@ int count_len(FILE *file, double &size){
       count++;
     }
     else {
-      if (dump2 != 0) size = dump2;
+      if (dump2 != 0 && size < dump2) size = dump2;
       break;
     }
   }
@@ -28,20 +28,20 @@ int count_len(FILE *file, double &size){
   return count;
 }
 
-void draw_box(double L, FILE *outfile) {
+void draw_box(double xy, double z, FILE *outfile) {
   // baaaaarf.
-  fprintf(outfile,"l3 -%e -%e -%e -%e -%e  %e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3 -%e -%e  %e -%e  %e  %e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3 -%e  %e  %e -%e  %e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3 -%e  %e -%e -%e -%e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e -%e -%e  %e -%e  %e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e -%e  %e  %e  %e  %e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e  %e  %e  %e  %e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e  %e -%e  %e -%e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e -%e -%e -%e -%e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e  %e -%e -%e  %e -%e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e -%e  %e -%e -%e  %e\n",L,L,L,L,L,L);
-  fprintf(outfile,"l3  %e  %e  %e -%e  %e  %e\n",L,L,L,L,L,L);
+  fprintf(outfile,"l3 -%e -%e  0  -%e -%e  %e\n",xy,xy,xy,xy,z);
+  fprintf(outfile,"l3 -%e -%e  %e -%e  %e  %e\n",xy,xy,z,xy,xy,z);
+  fprintf(outfile,"l3 -%e  %e  %e -%e  %e  0 \n",xy,xy,z,xy,xy);
+  fprintf(outfile,"l3 -%e  %e  0  -%e -%e  0 \n",xy,xy,xy,xy);
+  fprintf(outfile,"l3  %e -%e  0   %e -%e  %e\n",xy,xy,xy,xy,z);
+  fprintf(outfile,"l3  %e -%e  %e  %e  %e  %e\n",xy,xy,z,xy,xy,z);
+  fprintf(outfile,"l3  %e  %e  %e  %e  %e  0 \n",xy,xy,z,xy,xy);
+  fprintf(outfile,"l3  %e  %e  0   %e -%e  0 \n",xy,xy,xy,xy);
+  fprintf(outfile,"l3  %e -%e  0  -%e -%e  0 \n",xy,xy,xy,xy);
+  fprintf(outfile,"l3  %e  %e  0  -%e  %e  0 \n",xy,xy,xy,xy);
+  fprintf(outfile,"l3  %e -%e  %e -%e -%e  %e\n",xy,xy,z,xy,xy,z);
+  fprintf(outfile,"l3  %e  %e  %e -%e  %e  %e\n",xy,xy,z,xy,xy,z);
 }
 
 int main(int argc, char **argv){
@@ -54,9 +54,10 @@ int main(int argc, char **argv){
   char* outfilename = argv[2];
   char* savefilename = argv[3];
   double pad = atof(argv[4]);
-  double size = atof(argv[5]);
-  int num_step = atoi(argv[6]);
-  omp_set_num_threads(atoi(argv[7]));
+  double sizexy = atof(argv[5]);
+  double sizez = atof(argv[6]);
+  int num_step = atoi(argv[7]);
+  omp_set_num_threads(atoi(argv[8]));
 
   //file io
   FILE *infile = fopen(infilename, "r");
@@ -65,7 +66,7 @@ int main(int argc, char **argv){
   FILE *kinetic = fopen("kinetic.txt", "w");
 
   //particle variables
-  int n = count_len(infile, size);
+  int n = count_len(infile, sizexy);
   V3d ps[n];
   V3d vs[n];
   V3d as[n];
@@ -80,20 +81,23 @@ int main(int argc, char **argv){
   //environment variable
   double gravity = -0.1;
   double e = 0;
-  double conduct = 0.025;
-  double env_vel = 1.5;
+  double conduct = 0.015;
+  double env_vel = 2.5;
   double last_ke = 0;
   double current_ke = 0;
   double pe = 0;
+  double energy_added = 0;
 
   //box variables
-  V3d origin(-size / 2);
-  int side = (int)(size / pad / r0);
-  iV3d b_side(side * side, side, side * side * side);
-  int blen = side * side * side;
-  double gridsize = size / side;
-  double bound = (size - gridsize) / 2.0;
-  sLink *box = new sLink[blen];
+  V3d origin(-sizexy / 2, -sizexy / 2, 0);
+  int sidexy = (int)(sizexy / pad / r0);
+  double gridsize = sizexy / sidexy;
+  int sidez = (int)(sizez / gridsize);
+  iV3d b_side(sidez * sidexy, sidez, sidexy * sidexy * sidez);
+  double boundxy = (sizexy - gridsize) / 2.0;
+  double boundz = sizez - gridsize;
+  sLink *box = new sLink[b_side.z];
+  printf("%f %f %d %d\n", boundxy, boundz, sidexy, sidez);
   // sLink box[blen];
   sLink pss[n];
 
@@ -102,6 +106,7 @@ int main(int argc, char **argv){
   generate(ps, vs, ms, n, infile);
   init_grid(box, pss, ps, zone, b_side, gridsize, origin, n);
 
+  //main loop
   for (int i = 0; i <= num_step; i++){
     double t = i * dt;
 
@@ -111,42 +116,59 @@ int main(int argc, char **argv){
       ps[i].add(d);
     }
 
-    check_grid(box, ps, zone, b_side, gridsize, origin, blen);
+    check_grid(box, ps, zone, b_side, gridsize, origin);
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
       apply(box, ps, as, num_inter, i, zone, b_side, gridsize);
     }
 
+    // if (boundxy > 0.7) boundxy -= 0.0001;
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d *p = ps + i;
       double x = fabs(p->x);
       double y = fabs(p->y);
-      double z = fabs(p->z);
       double f;
 
-      as[i].z += gravity;
+      /* if (num_inter[i] > blob)  */as[i].z += gravity;
 
-      if (x > bound){
-        f = 50000 * (bound - x) / x * p->x;
+      if (x > boundxy){
+        f = 50000 * (boundxy - x) / x * p->x;
         as[i].x += f;
       }
 
-      if (y > bound){
-        f = 50000 * (bound - y) / y * p->y;
+      if (y > boundxy){
+        f = 50000 * (boundxy - y) / y * p->y;
         as[i].y += f;
       }
 
-      if (z > bound){
-        f = 50000 * (bound - z) / z * p->z;
+      if (p->z < 0){
+        f = 50000 * (-p->z);
         as[i].z += f;
+        double oldke = 0.5 * vs[i].lensqr();
         double len = vs[i].len();
-        if (ps[i].z < 0){
-          V3d dv = (env_vel - len) * conduct * vs[i];
-          vs[i].add(dv);
+        double factor = (env_vel - len) * conduct;
+        V3d dv = factor * vs[i];
+        vs[i].add(dv);
+        double newke =  0.5 * vs[i].lensqr();
+        #pragma omp critical
+        {
+          energy_added += newke - oldke;
         }
       }
+
+      if (p->z > boundz) {
+        f = 50000 * (boundz - p->z);
+        as[i].z += f;
+      }
+
+      // if (num_inter[i] > blob) {
+      //   double oldke = 0.5 * vs[i].lensqr();
+      //   vs[i].mul(1.0001);
+      //   double newke = 0.5 * vs[i].lensqr();
+      //   energy_added += newke - oldke;
+      // }
     }
 
 
@@ -165,9 +187,9 @@ int main(int argc, char **argv){
 
     if (i % 100 == 0){
       // pe = potential_energy(ps, n, gridsize);
-      current_ke= kinetic_energy(vs, n);
+      current_ke= temperature(vs, n);
       e = current_ke + pe;
-      fprintf(kinetic, "%f %f %f %f\n", t, current_ke, e, current_ke - last_ke);
+      fprintf(kinetic, "%f %f %f %f\n", t, current_ke, e, energy_added);
       last_ke = current_ke;
 
       printf("%d\n", i);
@@ -194,7 +216,7 @@ int main(int argc, char **argv){
           fprintf(outfile, "c3 %f %f %f 0.1\n", p->x, p->y, p->z);
         }
       }
-      draw_box(bound, outfile);
+      draw_box(boundxy, boundz, outfile);
       fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\n", dt * i, e);
       fprintf(outfile, "F\n");
     }
@@ -202,6 +224,7 @@ int main(int argc, char **argv){
   fclose(infile);
 
   //saving current condition to file
+  double newsize = boundxy * 2 + gridsize;
   FILE *savefile = strncmp(savefilename, "stdout", 10) == 0 ? stdout :
     (strncmp(savefilename, "null", 5) == 0 ? nullptr : fopen(savefilename, "w"));
   if (savefile != nullptr) {
@@ -210,6 +233,7 @@ int main(int argc, char **argv){
       V3d *v = vs + i;
       fprintf(savefile, "%.15lf %.15lf %.15lf %.15lf %.15lf %.15lf %.15lf\n", p->x, p->y, p->z, v->x, v->y, v->z, ms[i]);
     }
-    fprintf(savefile, "%.15lf\n", size);
+    fprintf(savefile, "%.15lf\n", newsize);
   }
+  printf("new size is %f\n", newsize);
 }
