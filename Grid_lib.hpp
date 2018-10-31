@@ -16,26 +16,17 @@ int getzone(V3d &pos, iV3d &b_side, double gridsize, V3d &origin){
   return x * b_side.x + y * b_side.y + z;
 }
 
-void check_grid(sLink *box, V3d *pos, int *zone, iV3d &b_side, double gridsize, V3d &origin){
+void check_grid(sLink *box, V3d *pos, int *zone, iV3d &b_side, int n, double gridsize, V3d &origin){
   #pragma omp parallel for
-  for (int i = 0; i < b_side.z; i++){
-    sLink *current = box + i;
-    sLink *target;
-    while (current->next != nullptr) {
-      int tag = current->next->val;
-      int correct_zone = getzone(pos[tag], b_side, gridsize, origin);
-      if (correct_zone != zone[tag]){
-        zone[tag] = correct_zone;
-        target = current->remove_next();
-        if (correct_zone >=0 && correct_zone <b_side.z){
-          #pragma omp critical
-          {
-            box[correct_zone].add(target);
-          }
-        }
+  for (int i = 0; i < n; i++) {
+    int correctzone = getzone(pos[i], b_side, gridsize, origin);
+    if (correctzone != zone[i]) {
+      #pragma omp critical
+      {
+      sLink* target = box[zone[i]].remove(i);
+      box[correctzone].add(target);
+      zone[i] = correctzone;
       }
-      current = current->next;
-      if (current == nullptr) break;
     }
   }
 }

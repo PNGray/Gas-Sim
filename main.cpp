@@ -74,14 +74,15 @@ int main(int argc, char **argv){
   int num_inter[n];
   int zone[n];
 
-  //color variables
+  //animation variables
   bool color = false;
   int blob = 5;
+  int steps_per_frame = 100;
 
   //environment variable
   double gravity = -0.1;
   double e = 0;
-  double conduct = 0.015;
+  double conduct = 0.025;
   double env_vel = 2.5;
   double last_ke = 0;
   double current_ke = 0;
@@ -116,7 +117,7 @@ int main(int argc, char **argv){
       ps[i].add(d);
     }
 
-    check_grid(box, ps, zone, b_side, gridsize, origin);
+    check_grid(box, ps, zone, b_side, n,  gridsize, origin);
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
@@ -131,7 +132,7 @@ int main(int argc, char **argv){
       double y = fabs(p->y);
       double f;
 
-      /* if (num_inter[i] > blob)  */as[i].z += gravity;
+      as[i].z += gravity;
 
       if (x > boundxy){
         f = 50000 * (boundxy - x) / x * p->x;
@@ -185,7 +186,7 @@ int main(int argc, char **argv){
       ps[i].add(d);
     }
 
-    if (i % 100 == 0){
+    if (i % steps_per_frame == 0){
       // pe = potential_energy(ps, n, gridsize);
       current_ke= temperature(vs, n);
       e = current_ke + pe;
