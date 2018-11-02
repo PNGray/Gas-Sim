@@ -45,19 +45,25 @@ void draw_box(double xy, double z, FILE *outfile) {
 }
 
 int main(int argc, char **argv){
-  if (argc < 8) {
-    printf("infile outfile savefile pad size numstep numthreads\n");
+  if (argc < 12) {
+    printf("infile outfile savefile pad sizexy sizey conduct envvel numstep spf numthreads\n");
     return 0;
   }
   //inputs variables
+  //file io
   char* infilename = argv[1];
   char* outfilename = argv[2];
   char* savefilename = argv[3];
+  //env var
   double pad = atof(argv[4]);
   double sizexy = atof(argv[5]);
   double sizez = atof(argv[6]);
-  int num_step = atoi(argv[7]);
-  omp_set_num_threads(atoi(argv[8]));
+  double conduct = atof(argv[7]);
+  double env_vel = atof(argv[8]);
+  //time var
+  int num_step = atoi(argv[9]);
+  int steps_per_frame = atoi(argv[10]);
+  omp_set_num_threads(atoi(argv[11]));
 
   //file io
   FILE *infile = fopen(infilename, "r");
@@ -77,17 +83,15 @@ int main(int argc, char **argv){
   //animation variables
   bool color = false;
   int blob = 5;
-  int steps_per_frame = 100;
 
   //environment variable
   double gravity = -0.1;
   double e = 0;
-  double conduct = 0.025;
-  double env_vel = 2.5;
   double last_ke = 0;
   double current_ke = 0;
   double pe = 0;
   double energy_added = 0;
+  double impulse = 0;
 
   //box variables
   V3d origin(-sizexy / 2, -sizexy / 2, 0);
@@ -111,9 +115,10 @@ int main(int argc, char **argv){
   for (int i = 0; i <= num_step; i++){
     double t = i * dt;
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d d = dthalf * vs[i];
+      energy_added += gravity * d.z;
       ps[i].add(d);
     }
 
@@ -125,7 +130,7 @@ int main(int argc, char **argv){
     }
 
     // if (boundxy > 0.7) boundxy -= 0.0001;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d *p = ps + i;
       double x = fabs(p->x);
@@ -134,18 +139,23 @@ int main(int argc, char **argv){
 
       as[i].z += gravity;
 
-      if (x > boundxy){
-        f = 50000 * (boundxy - x) / x * p->x;
+      if (x > boundxy /* - 0.01 * r0 */){
+        f = 10000 * (boundxy - x);
+        impulse += f * dt;
+        f /= x * p->x;
         as[i].x += f;
       }
 
-      if (y > boundxy){
-        f = 50000 * (boundxy - y) / y * p->y;
+      if (y > boundxy /* - 0.01 * r0 */){
+        f = 10000 * (boundxy - y);
+        impulse += f * dt;
+        f /= y * p->y;
         as[i].y += f;
       }
 
-      if (p->z < 0){
-        f = 50000 * (-p->z);
+      if (p->z < 0 /* + 0.01 * r0 */){
+        f = 10000 * (-p->z);
+        impulse += f * dt;
         as[i].z += f;
         double oldke = 0.5 * vs[i].lensqr();
         double len = vs[i].len();
@@ -159,17 +169,22 @@ int main(int argc, char **argv){
         }
       }
 
-      if (p->z > boundz) {
-        f = 50000 * (boundz - p->z);
+      if (p->z > boundz /* - 0.01 * r0 */) {
+        f = 10000 * (boundz - p->z);
+        impulse -= f * dt;
         as[i].z += f;
+        // double oldke = 0.5 * vs[i].lensqr();
+        // double len = vs[i].len();
+        // double factor = (0.2 - len) * 0.2;
+        // V3d dv = factor * vs[i];
+        // vs[i].add(dv);
+        // double newke =  0.5 * vs[i].lensqr();
+        // #pragma omp critical
+        // {
+        //   energy_added += newke - oldke;
+        // }
       }
 
-      // if (num_inter[i] > blob) {
-      //   double oldke = 0.5 * vs[i].lensqr();
-      //   vs[i].mul(1.0001);
-      //   double newke = 0.5 * vs[i].lensqr();
-      //   energy_added += newke - oldke;
-      // }
     }
 
 
@@ -180,9 +195,10 @@ int main(int argc, char **argv){
       as[i].reset();
     }
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d d = dthalf * vs[i];
+      energy_added += gravity * d.z;
       ps[i].add(d);
     }
 
@@ -197,25 +213,15 @@ int main(int argc, char **argv){
       if (outfile == nullptr) continue;
       for (int j = 0; j < n; j++){
         V3d *p = ps + j;
-        if (j == 0){
-          fprintf(outfile, "C 1 0 0\n");
-          fprintf(outfile, "ct3 0 %f %f %f 0.1\n", p->x, p->y, p->z);
+        if (num_inter[j] > blob && !color) {
+          fprintf(outfile, "C 0 1 1\n");
+          color = true;
         }
-        else {
-          if (j == 1) {
-            fprintf(outfile, "C 1 1 1\n");
-            color = false;
-          }
-          if (num_inter[j] > blob && !color) {
-            fprintf(outfile, "C 0 1 1\n");
-            color = true;
-          }
-          else if (num_inter[j] < blob && color) {
-            fprintf(outfile, "C 1 1 1\n");
-            color = false;
-          }
-          fprintf(outfile, "c3 %f %f %f 0.1\n", p->x, p->y, p->z);
+        else if (num_inter[j] < blob && color) {
+          fprintf(outfile, "C 1 1 1\n");
+          color = false;
         }
+        fprintf(outfile, "c3 %f %f %f 0.07\n", p->x, p->y, p->z);
       }
       draw_box(boundxy, boundz, outfile);
       fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\n", dt * i, e);

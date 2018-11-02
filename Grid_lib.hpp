@@ -59,7 +59,7 @@ double V(double r2, double gridsize){
 }
 
 double temperature(V3d *vs, int n){
-  double ke = 0;
+  double temp = 0;
   V3d avg_v(0);
   for (int i = 0; i < n; i++){
     avg_v.add(*(vs + i));
@@ -67,7 +67,15 @@ double temperature(V3d *vs, int n){
   avg_v.div(n);
   for (int i = 0; i < n; i++){
     V3d rel_v = *(vs + i) - avg_v;
-    ke += 0.5 * m * rel_v.lensqr();
+    temp += 0.5 * m * rel_v.lensqr();
+  }
+  return temp;
+}
+
+double kinetic_energy(V3d *vs, int n){
+  double ke = 0;
+  for (int i = 0; i < n; i++){
+    ke += 0.5 * m * vs[i].lensqr();
   }
   return ke;
 }
