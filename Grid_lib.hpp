@@ -51,11 +51,15 @@ void init_grid(sLink *box, sLink *pss, V3d *pos, int *zone, iV3d &b_side, double
 }
 
 double V(double r2, double gridsize){
-  double g2 = gridsize * gridsize;
-  if (r2 > g2) return V(g2 , gridsize);
+  static double g2 = gridsize * gridsize;
+  static double g2u = g2 / r02;
+  static double g6u = g2u * g2u * g2u;
+  static double ground = (4 * r0 * (1 / g6u / g6u) - 1 / g6u);
+
+  if (r2 > g2) return 0;
   r2 /= r02;
   double r6 = r2 * r2 * r2;
-  return (4 * r0 * (1 / r6 / r6) - 1 / r6);
+  return (4 * r0 * (1 / r6 / r6) - 1 / r6) - ground;
 }
 
 double temperature(V3d *vs, int n){
@@ -86,14 +90,12 @@ double potential_energy(V3d *ps, int n, double gridsize){
   V3d dist;
   for (int i = 0; i < n; i++){
     #pragma omp parallel for private(r2, dist)
-    for (int j = 0; j < n; j++){
-      if (i != j) {
-        dist = *(ps + i) - *(ps + j);
-        r2 = dist.lensqr();
-        #pragma omp critical
-        {
-          pe += V(r2, gridsize);
-        }
+    for (int j = i + 1; j < n; j++){
+      dist = *(ps + i) - *(ps + j);
+      r2 = dist.lensqr();
+      #pragma omp critical
+      {
+        pe += V(r2, gridsize);
       }
     }
   }

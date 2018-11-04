@@ -84,27 +84,36 @@ int main(int argc, char **argv){
   bool color = false;
   int blob = 5;
 
+  //box variables
+  double bound_pad = 1;
+  V3d origin(-sizexy / 2, -sizexy / 2, -bound_pad / 2);
+  int sidexy = (int)(sizexy / pad / r0);
+  double gridsize = sizexy / sidexy;
+  int sidez = (int)(sizez / gridsize);
+  iV3d b_side(sidez * sidexy, sidez, sidexy * sidexy * sidez);
+  double boundxy = (sizexy - bound_pad) / 2.0;
+  double boundz = sizez - bound_pad / 2.0;
+  sLink *box = new sLink[b_side.z];
+  printf("%f %f %d %d %f\n", boundxy, boundz, sidexy, sidez, gridsize);
+  // sLink box[blen];
+  sLink pss[n];
+
   //environment variable
-  double gravity = -0.1;
+  double gravity = -0.;
   double e = 0;
   double last_ke = 0;
   double current_ke = 0;
   double pe = 0;
   double energy_added = 0;
   double impulse = 0;
-
-  //box variables
-  V3d origin(-sizexy / 2, -sizexy / 2, 0);
-  int sidexy = (int)(sizexy / pad / r0);
-  double gridsize = sizexy / sidexy;
-  int sidez = (int)(sizez / gridsize);
-  iV3d b_side(sidez * sidexy, sidez, sidexy * sidexy * sidez);
-  double boundxy = (sizexy - gridsize) / 2.0;
-  double boundz = sizez - gridsize;
-  sLink *box = new sLink[b_side.z];
-  printf("%f %f %d %d\n", boundxy, boundz, sidexy, sidez);
-  // sLink box[blen];
-  sLink pss[n];
+  double pressure = 0;
+  int p_sample = 1000;
+  double area = 8 * boundxy * boundxy + 8 * boundxy * boundz;
+  // double k = 1.38 * pow(10, -23);
+  double volume = 4 * boundxy * boundxy * boundz;
+  double PV = 0;
+  double NkT = 0;
+  double ratio = 0;
 
   //initialization
   init_ps_links(pss, n);
@@ -129,7 +138,14 @@ int main(int argc, char **argv){
       apply(box, ps, as, num_inter, i, zone, b_side, gridsize);
     }
 
-    // if (boundxy > 0.7) boundxy -= 0.0001;
+    // compress
+    if (t > 0) {
+      if (boundxy > 1) boundxy -= 0.0001;
+      if (boundz > 1.351351) boundz -= 0.0002;
+    }
+    if (t == 20) conduct /= 2;
+    if (current_ke < 11600 && t > 10) conduct = 0;
+
     // #pragma omp parallel for
     for (int i = 0; i < n; i++){
       V3d *p = ps + i;
@@ -141,21 +157,21 @@ int main(int argc, char **argv){
 
       if (x > boundxy /* - 0.01 * r0 */){
         f = 10000 * (boundxy - x);
-        impulse += f * dt;
-        f /= x * p->x;
+        impulse -= f;
+        f /= x / p->x;
         as[i].x += f;
       }
 
       if (y > boundxy /* - 0.01 * r0 */){
         f = 10000 * (boundxy - y);
-        impulse += f * dt;
-        f /= y * p->y;
+        impulse -= f;
+        f /= y / p->y;
         as[i].y += f;
       }
 
       if (p->z < 0 /* + 0.01 * r0 */){
         f = 10000 * (-p->z);
-        impulse += f * dt;
+        impulse += f;
         as[i].z += f;
         double oldke = 0.5 * vs[i].lensqr();
         double len = vs[i].len();
@@ -171,7 +187,7 @@ int main(int argc, char **argv){
 
       if (p->z > boundz /* - 0.01 * r0 */) {
         f = 10000 * (boundz - p->z);
-        impulse -= f * dt;
+        impulse -= f;
         as[i].z += f;
         // double oldke = 0.5 * vs[i].lensqr();
         // double len = vs[i].len();
@@ -202,11 +218,22 @@ int main(int argc, char **argv){
       ps[i].add(d);
     }
 
+
+    if (i % p_sample == 0) {
+      area =  8 * boundxy * boundxy + 8 * boundxy * boundz;
+      pressure = impulse / p_sample / area;
+      impulse = 0;
+    }
+
     if (i % steps_per_frame == 0){
       // pe = potential_energy(ps, n, gridsize);
-      current_ke= temperature(vs, n);
+      volume = 4 * boundxy * boundxy * boundz;
+      current_ke= kinetic_energy(vs, n);
       e = current_ke + pe;
-      fprintf(kinetic, "%f %f %f %f\n", t, current_ke, e, energy_added);
+      PV = pressure * volume;
+      NkT = current_ke * 2.0 / 3.0;
+      ratio = PV / NkT;
+      fprintf(kinetic, "%f %f %f %f %f\n", t, current_ke, energy_added, e, ratio);
       last_ke = current_ke;
 
       printf("%d\n", i);
@@ -224,14 +251,14 @@ int main(int argc, char **argv){
         fprintf(outfile, "c3 %f %f %f 0.07\n", p->x, p->y, p->z);
       }
       draw_box(boundxy, boundz, outfile);
-      fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\n", dt * i, e);
+      fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\tP = %f\tV = %f\nT -0.8 0.7\nPV = %f\t NkT = %f\t ratio = %f\n", dt * i, e, pressure, volume, PV, NkT, ratio);
       fprintf(outfile, "F\n");
     }
   }
   fclose(infile);
 
   //saving current condition to file
-  double newsize = boundxy * 2 + gridsize;
+  double newsize = boundxy * 2 + bound_pad;
   FILE *savefile = strncmp(savefilename, "stdout", 10) == 0 ? stdout :
     (strncmp(savefilename, "null", 5) == 0 ? nullptr : fopen(savefilename, "w"));
   if (savefile != nullptr) {
