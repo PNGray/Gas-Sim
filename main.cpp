@@ -141,7 +141,7 @@ int main(int argc, char **argv){
     // compress
     if (t > 0) {
       if (boundxy > 1) boundxy -= 0.0001;
-      if (boundz > 1.351351) boundz -= 0.0002;
+      if (boundz > 1.1) boundz -= 0.0002;
     }
     if (t == 20) conduct /= 2;
     if (current_ke < 11600 && t > 10) conduct = 0;
