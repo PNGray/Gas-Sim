@@ -9,6 +9,7 @@
 
 const double dt = 0.001;
 const double dthalf = dt / 2;
+extern const double r0half;
 int count_len(FILE *file, double &size){
   double dump;
   double dump2 = 0;
@@ -93,6 +94,7 @@ int main(int argc, char **argv){
   iV3d b_side(sidez * sidexy, sidez, sidexy * sidexy * sidez);
   double boundxy = (sizexy - bound_pad) / 2.0;
   double boundz = sizez - bound_pad / 2.0;
+  double rboundxy = boundxy - r0half, rboundz = boundz- r0half;
   sLink *box = new sLink[b_side.z];
   printf("%f %f %d %d %f\n", boundxy, boundz, sidexy, sidez, gridsize);
   // sLink box[blen];
@@ -140,8 +142,8 @@ int main(int argc, char **argv){
 
     // compress
     if (t > 0) {
-      if (boundxy > 1) boundxy -= 0.0001;
-      if (boundz > 1.1) boundz -= 0.0002;
+      if (boundxy > 0.8) {boundxy -= 0.00005; rboundxy = boundxy - r0half;}
+      if (boundz > 1.26953125) {boundz -= 0.0002; rboundz = boundz - r0half;}
     }
     if (t == 20) conduct /= 2;
     if (current_ke < 11600 && t > 10) conduct = 0;
@@ -155,22 +157,22 @@ int main(int argc, char **argv){
 
       as[i].z += gravity;
 
-      if (x > boundxy /* - 0.01 * r0 */){
-        f = 10000 * (boundxy - x);
+      if (x > rboundxy /* - 0.01 * r0 */){
+        f = 10000 * (rboundxy - x);
         impulse -= f;
         f /= x / p->x;
         as[i].x += f;
       }
 
-      if (y > boundxy /* - 0.01 * r0 */){
-        f = 10000 * (boundxy - y);
+      if (y > rboundxy /* - 0.01 * r0 */){
+        f = 10000 * (rboundxy - y);
         impulse -= f;
         f /= y / p->y;
         as[i].y += f;
       }
 
-      if (p->z < 0 /* + 0.01 * r0 */){
-        f = 10000 * (-p->z);
+      if (p->z < r0half /* + 0.01 * r0 */){
+        f = 10000 * (r0half - p->z);
         impulse += f;
         as[i].z += f;
         double oldke = 0.5 * vs[i].lensqr();
@@ -185,8 +187,8 @@ int main(int argc, char **argv){
         }
       }
 
-      if (p->z > boundz /* - 0.01 * r0 */) {
-        f = 10000 * (boundz - p->z);
+      if (p->z > rboundz /* - 0.01 * r0 */) {
+        f = 10000 * (rboundz - p->z);
         impulse -= f;
         as[i].z += f;
         // double oldke = 0.5 * vs[i].lensqr();

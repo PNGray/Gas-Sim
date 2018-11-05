@@ -6,6 +6,7 @@
 
 const double r0 = 0.15;
 const double r02 = r0 * r0;
+const double r0half = 0.5 * r0;
 const double thresh = pow(20, 2) * r02;
 const double m = 1;
 int getzone(V3d &pos, iV3d &b_side, double gridsize, V3d &origin){
