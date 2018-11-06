@@ -141,12 +141,12 @@ int main(int argc, char **argv){
     }
 
     // compress
-    if (t > 0) {
-      if (boundxy > 0.8) {boundxy -= 0.00005; rboundxy = boundxy - r0half;}
-      if (boundz > 1.26953125) {boundz -= 0.0002; rboundz = boundz - r0half;}
-    }
-    if (t == 20) conduct /= 2;
-    if (current_ke < 11600 && t > 10) conduct = 0;
+    // if (t > 0) {
+    //   if (boundxy > 0.8) {boundxy -= 0.00005; rboundxy = boundxy - r0half;}
+    //   if (boundz > 1.26953125) {boundz -= 0.0002; rboundz = boundz - r0half;}
+    // }
+    // if (t == 20) conduct /= 2;
+    // if (current_ke < 11600 && t > 10) conduct = 0;
 
     // #pragma omp parallel for
     for (int i = 0; i < n; i++){
@@ -228,14 +228,14 @@ int main(int argc, char **argv){
     }
 
     if (i % steps_per_frame == 0){
-      // pe = potential_energy(ps, n, gridsize);
       volume = 4 * boundxy * boundxy * boundz;
       current_ke= kinetic_energy(vs, n);
+      pe = potential_energy(box, ps, zone, b_side, n, gridsize);
       e = current_ke + pe;
       PV = pressure * volume;
       NkT = current_ke * 2.0 / 3.0;
       ratio = PV / NkT;
-      fprintf(kinetic, "%f %f %f %f %f\n", t, current_ke, energy_added, e, ratio);
+      fprintf(kinetic, "%f %f %f %f %f %f\n", t, current_ke, pe, energy_added, e, ratio);
       last_ke = current_ke;
 
       printf("%d\n", i);

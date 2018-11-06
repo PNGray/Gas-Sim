@@ -60,7 +60,7 @@ double V(double r2, double gridsize){
   if (r2 > g2) return 0;
   r2 /= r02;
   double r6 = r2 * r2 * r2;
-  return (4 * r0 * (1 / r6 / r6) - 1 / r6) - ground;
+  return (4 * r0 * (1 / r6 / r6 - 1 / r6)) - ground;
 }
 
 double temperature(V3d *vs, int n){
@@ -85,23 +85,39 @@ double kinetic_energy(V3d *vs, int n){
   return ke;
 }
 
-double potential_energy(V3d *ps, int n, double gridsize){
-  double pe = 0;
-  double r2;
+double potential_energy(sLink *box, V3d *ps, int *zone , iV3d &b_side, int nn, double gridsize){
+  double pe= 0;
+  int current;
+  sLink *grid;
+  sLink *tracker;
   V3d dist;
-  for (int i = 0; i < n; i++){
-    #pragma omp parallel for private(r2, dist)
-    for (int j = i + 1; j < n; j++){
-      dist = *(ps + i) - *(ps + j);
-      r2 = dist.lensqr();
-      #pragma omp critical
-      {
-        pe += V(r2, gridsize);
+  #pragma omp parallel for private(current, grid, tracker, dist)
+  for (int n = 0; n < nn; n++){
+    for (int i = -1; i <= 1; i++){
+      for (int j = -1; j <=1; j++){
+        for (int k = -1; k <=1; k++){
+          current = zone[n] + b_side.x * i + b_side.y * j + k;
+          if (current >= 0 && current < b_side.z){
+            grid = box + current;
+            tracker = grid->next;
+            while (tracker != nullptr){
+              if (tracker->val != n) {
+                dist = ps[n] - ps[tracker->val];
+                #pragma omp critical
+                {
+                  pe += V(dist.lensqr(), gridsize);
+                }
+              }
+              tracker = tracker->next;
+            }
+          }
+        }
       }
     }
   }
   return pe;
 }
+
 void gas_force(V3d &p1, V3d &p2, V3d &a, int &num_inter, double gridsize){
   V3d r = p1 - p2;
   double rlen2 = r.lensqr();

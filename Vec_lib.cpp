@@ -164,7 +164,7 @@ int generate(V3d* ps, V3d* vs, double* ms, double n, FILE *file){
       v = vs + index;
       p->x = x;
       p->y = y;
-      p->z = z;
+      p->z = z + 0.15;
       v->x = vx;
       v->y = vy;
       v->z = vz;
