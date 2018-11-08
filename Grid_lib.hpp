@@ -51,16 +51,11 @@ void init_grid(sLink *box, sLink *pss, V3d *pos, int *zone, iV3d &b_side, double
   }
 }
 
-double V(double r2, double gridsize){
-  static double g2 = gridsize * gridsize;
-  static double g2u = g2 / r02;
-  static double g6u = g2u * g2u * g2u;
-  static double ground = (4 * r0 * (1 / g6u / g6u) - 1 / g6u);
-
+double V(double r2, double g2, double zero_point){
   if (r2 > g2) return 0;
   r2 /= r02;
   double r6 = r2 * r2 * r2;
-  return (4 * r0 * (1 / r6 / r6 - 1 / r6)) - ground;
+  return (4 * r0 * (1 / r6 / r6 - 1 / r6)) - zero_point;
 }
 
 double temperature(V3d *vs, int n){
@@ -85,7 +80,7 @@ double kinetic_energy(V3d *vs, int n){
   return ke;
 }
 
-double potential_energy(sLink *box, V3d *ps, int *zone , iV3d &b_side, int nn, double gridsize){
+double potential_energy(sLink *box, V3d *ps, int *zone , iV3d &b_side, int nn, double g2, double zero_point){
   double pe= 0;
   int current;
   sLink *grid;
@@ -105,7 +100,7 @@ double potential_energy(sLink *box, V3d *ps, int *zone , iV3d &b_side, int nn, d
                 dist = ps[n] - ps[tracker->val];
                 #pragma omp critical
                 {
-                  pe += V(dist.lensqr(), gridsize);
+                  pe += V(dist.lensqr(), g2, zero_point) / 2.0;
                 }
               }
               tracker = tracker->next;

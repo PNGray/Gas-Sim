@@ -80,6 +80,8 @@ int main(int argc, char **argv){
   double ms[n];
   int num_inter[n];
   int zone[n];
+  double p_rad = 0.075;
+  double particle_volume = 4.0 / 3.0 * M_PI * p_rad * p_rad * p_rad * n;
 
   //animation variables
   bool color = false;
@@ -90,15 +92,15 @@ int main(int argc, char **argv){
   V3d origin(-sizexy / 2, -sizexy / 2, -bound_pad / 2);
   int sidexy = (int)(sizexy / pad / r0);
   double gridsize = sizexy / sidexy;
+  double gs3 = gridsize * gridsize * gridsize;
   int sidez = (int)(sizez / gridsize);
   iV3d b_side(sidez * sidexy, sidez, sidexy * sidexy * sidez);
   double boundxy = (sizexy - bound_pad) / 2.0;
   double boundz = sizez - bound_pad / 2.0;
-  double rboundxy = boundxy - r0half, rboundz = boundz- r0half;
+  double rboundxy = boundxy - r0half, rboundz = boundz - r0half;
   sLink *box = new sLink[b_side.z];
-  printf("%f %f %d %d %f\n", boundxy, boundz, sidexy, sidez, gridsize);
-  // sLink box[blen];
   sLink pss[n];
+  printf("%f %f %d %d %f\n", boundxy, boundz, sidexy, sidez, gridsize);
 
   //environment variable
   double gravity = -0.;
@@ -108,14 +110,25 @@ int main(int argc, char **argv){
   double pe = 0;
   double energy_added = 0;
   double impulse = 0;
+  double sample_t = 0;
+  double sample_pe = 0;
   double pressure = 0;
-  int p_sample = 1000;
+  int p_sample = 5000;
+  int t_sample = p_sample / steps_per_frame;
   double area = 8 * boundxy * boundxy + 8 * boundxy * boundz;
-  // double k = 1.38 * pow(10, -23);
   double volume = 4 * boundxy * boundxy * boundz;
   double PV = 0;
   double NkT = 0;
   double ratio = 0;
+  double n_per_v = n / volume; //density
+  double beta = 0;
+
+  //binding energy calculation
+  double g2 = gridsize * gridsize;
+  double g2u = g2 / r02;
+  double g6u = g2u * g2u * g2u;
+  double zero_point = (4 * r0 * (1 / g6u / g6u) - 1 / g6u);
+  printf("%f\n", zero_point * n);
 
   //initialization
   init_ps_links(pss, n);
@@ -225,17 +238,25 @@ int main(int argc, char **argv){
       area =  8 * boundxy * boundxy + 8 * boundxy * boundz;
       pressure = impulse / p_sample / area;
       impulse = 0;
+
+      current_ke = sample_t / t_sample;
+      sample_t = 0;
+
+      pe = sample_pe / t_sample;
+      sample_pe = 0;
     }
 
     if (i % steps_per_frame == 0){
       volume = 4 * boundxy * boundxy * boundz;
-      current_ke= kinetic_energy(vs, n);
-      pe = potential_energy(box, ps, zone, b_side, n, gridsize);
+      n_per_v = n / volume;
+      sample_t += kinetic_energy(vs, n);
+      sample_pe += potential_energy(box, ps, zone, b_side, n, g2, zero_point);
       e = current_ke + pe;
       PV = pressure * volume;
       NkT = current_ke * 2.0 / 3.0;
+      beta = -pressure * (volume - particle_volume) + NkT;
       ratio = PV / NkT;
-      fprintf(kinetic, "%f %f %f %f %f %f\n", t, current_ke, pe, energy_added, e, ratio);
+      fprintf(kinetic, "%f %f %f %f %f %f %f\n", t, current_ke, pe, energy_added, e, ratio, beta);
       last_ke = current_ke;
 
       printf("%d\n", i);
@@ -254,6 +275,7 @@ int main(int argc, char **argv){
       }
       draw_box(boundxy, boundz, outfile);
       fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\tP = %f\tV = %f\nT -0.8 0.7\nPV = %f\t NkT = %f\t ratio = %f\n", dt * i, e, pressure, volume, PV, NkT, ratio);
+      fprintf(outfile, "T -0.8 0.6\nKE = %f\tPE = %f\tbeta = %f\n", current_ke, pe, beta);
       fprintf(outfile, "F\n");
     }
   }
