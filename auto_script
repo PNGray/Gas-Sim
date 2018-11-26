@@ -1,0 +1,10 @@
+#!/bin/bash
+temp=$1
+d=$2
+v=$3
+for i in `seq 1 $4`;
+do
+    echo $temp $i
+    eval "./a.out float_dense.txt null null data$i.txt 2 $v $v 0.01 $temp 200000 100 7"
+    temp=`echo "$temp - $d" | bc -l`
+done

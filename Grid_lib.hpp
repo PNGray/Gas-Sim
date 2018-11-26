@@ -51,13 +51,6 @@ void init_grid(sLink *box, sLink *pss, V3d *pos, int *zone, iV3d &b_side, double
   }
 }
 
-double V(double r2, double g2, double zero_point){
-  if (r2 > g2) return 0;
-  r2 /= r02;
-  double r6 = r2 * r2 * r2;
-  return (4 * r0 * (1 / r6 / r6 - 1 / r6)) - zero_point;
-}
-
 double temperature(V3d *vs, int n){
   double temp = 0;
   V3d avg_v(0);
@@ -78,6 +71,13 @@ double kinetic_energy(V3d *vs, int n){
     ke += 0.5 * m * vs[i].lensqr();
   }
   return ke;
+}
+
+double V(double r2, double g2, double zero_point){
+  if (r2 > g2) return 0;
+  r2 /= r02;
+  double r6 = r2 * r2 * r2;
+  return (4 * r0 * (1 / r6 / r6 - 1 / r6)) - zero_point;
 }
 
 double potential_energy(sLink *box, V3d *ps, int *zone , iV3d &b_side, int nn, double g2, double zero_point){
@@ -138,12 +138,15 @@ void apply_grid(sLink *grid, int index, V3d *pos, V3d *acc, int *num_inter, doub
 }
 
 void apply(sLink *box, V3d *pos, V3d *acc, int *num_inter, int index, int *zone, iV3d &b_side, double gridsize){
-  int current;
+  int current = zone[index];
+  int currenti = current / b_side.x;
+  int currentj = current % b_side.x / b_side.y;
+  int currentk = current % b_side.y;
   num_inter[index] = 0;
-  for (int i = -1; i <= 1; i++){
-    for (int j = -1; j <=1; j++){
-      for (int k = -1; k <=1; k++){
-        current = zone[index] + b_side.x * i + b_side.y * j + k;
+  for (int i = currenti - 1; i <= currenti + 1; i++){
+    for (int j = currentj - 1; j <= currentj + 1; j++){
+      for (int k = currentk - 1; k <= currentk + 1; k++){
+        current = i * b_side.x + j * b_side.y + k;
         if (current >= 0 && current < b_side.z){
           apply_grid(box + current, index, pos, acc, num_inter, gridsize);
         }

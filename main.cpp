@@ -46,8 +46,8 @@ void draw_box(double xy, double z, FILE *outfile) {
 }
 
 int main(int argc, char **argv){
-  if (argc < 12) {
-    printf("infile outfile savefile pad sizexy sizey conduct envvel numstep spf numthreads\n");
+  if (argc < 13) {
+    printf("infile outfile savefile datafile pad sizexy sizey conduct envvel numstep spf numthreads\n");
     return 0;
   }
   //inputs variables
@@ -55,22 +55,30 @@ int main(int argc, char **argv){
   char* infilename = argv[1];
   char* outfilename = argv[2];
   char* savefilename = argv[3];
+  char* datafilename = argv[4];
   //env var
-  double pad = atof(argv[4]);
-  double sizexy = atof(argv[5]);
-  double sizez = atof(argv[6]);
-  double conduct = atof(argv[7]);
-  double env_vel = atof(argv[8]);
+  double pad = atof(argv[5]);
+  double sizexy = atof(argv[6]);
+  double sizez = atof(argv[7]);
+  double conduct = atof(argv[8]);
+  double env_vel = atof(argv[9]);
   //time var
-  int num_step = atoi(argv[9]);
-  int steps_per_frame = atoi(argv[10]);
-  omp_set_num_threads(atoi(argv[11]));
+  int num_step = atoi(argv[10]);
+  int steps_per_frame = atoi(argv[11]);
+  omp_set_num_threads(atoi(argv[12]));
 
   //file io
   FILE *infile = fopen(infilename, "r");
   FILE *outfile = strncmp(outfilename, "stdout", 10) == 0 ? stdout :
     (strncmp(outfilename, "null", 5) == 0 ? nullptr : fopen(outfilename, "w"));
-  FILE *kinetic = fopen("kinetic.txt", "w");
+  FILE *data = strncmp(datafilename, "stdout", 10) == 0 ? stdout :
+    (strncmp(datafilename, "null", 5) == 0 ? nullptr : fopen(datafilename, "w"));
+
+  //prints arguments data
+  fprintf(data,"#");
+  for (int i = 0; i < argc; i++) fprintf(data, "%s ", argv[i]);
+  fprintf(data, "\n");
+  fflush(data);
 
   //particle variables
   int n = count_len(infile, sizexy);
@@ -103,10 +111,10 @@ int main(int argc, char **argv){
   printf("%f %f %d %d %f\n", boundxy, boundz, sidexy, sidez, gridsize);
 
   //environment variable
+  double env_ke = n / 2.0 * env_vel * env_vel;
   double gravity = -0.;
   double e = 0;
-  double last_ke = 0;
-  double current_ke = 0;
+  double ke = 0;
   double pe = 0;
   double energy_added = 0;
   double impulse = 0;
@@ -127,8 +135,8 @@ int main(int argc, char **argv){
   double g2 = gridsize * gridsize;
   double g2u = g2 / r02;
   double g6u = g2u * g2u * g2u;
-  double zero_point = (4 * r0 * (1 / g6u / g6u) - 1 / g6u);
-  printf("%f\n", zero_point * n);
+  double zero_point = (4 * r0 * (1 / g6u / g6u - 1 / g6u));
+  printf("%f %f\n", zero_point * n, env_ke);
 
   //initialization
   init_ps_links(pss, n);
@@ -153,13 +161,16 @@ int main(int argc, char **argv){
       apply(box, ps, as, num_inter, i, zone, b_side, gridsize);
     }
 
+    if (i % steps_per_frame == 0)
+      sample_pe += potential_energy(box, ps, zone, b_side, n, g2, zero_point);
+
     // compress
     // if (t > 0) {
     //   if (boundxy > 0.8) {boundxy -= 0.00005; rboundxy = boundxy - r0half;}
     //   if (boundz > 1.26953125) {boundz -= 0.0002; rboundz = boundz - r0half;}
     // }
     // if (t == 20) conduct /= 2;
-    // if (current_ke < 11600 && t > 10) conduct = 0;
+    // if (ke < 11600 && t > 10) conduct = 0;
 
     // #pragma omp parallel for
     for (int i = 0; i < n; i++){
@@ -188,16 +199,16 @@ int main(int argc, char **argv){
         f = 10000 * (r0half - p->z);
         impulse += f;
         as[i].z += f;
-        double oldke = 0.5 * vs[i].lensqr();
-        double len = vs[i].len();
-        double factor = (env_vel - len) * conduct;
-        V3d dv = factor * vs[i];
-        vs[i].add(dv);
-        double newke =  0.5 * vs[i].lensqr();
-        #pragma omp critical
-        {
-          energy_added += newke - oldke;
-        }
+        // double oldke = 0.5 * vs[i].lensqr();
+        // double len = vs[i].len();
+        // double factor = (env_vel - len) * conduct;
+        // V3d dv = factor * vs[i];
+        // vs[i].add(dv);
+        // double newke =  0.5 * vs[i].lensqr();
+        // #pragma omp critical
+        // {
+        //   energy_added += newke - oldke;
+        // }
       }
 
       if (p->z > rboundz /* - 0.01 * r0 */) {
@@ -217,7 +228,16 @@ int main(int argc, char **argv){
       }
 
     }
-
+    if (ke > env_ke || t < 25)
+    for (int i = 0; i < n; i++){
+      double oldke = 0.5 * vs[i].lensqr();
+      double len = vs[i].len();
+      double factor = (env_vel - len) * conduct;
+      V3d dv = factor * vs[i];
+      vs[i].add(dv);
+      double newke =  0.5 * vs[i].lensqr();
+      energy_added += newke - oldke;
+    }
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
@@ -239,7 +259,7 @@ int main(int argc, char **argv){
       pressure = impulse / p_sample / area;
       impulse = 0;
 
-      current_ke = sample_t / t_sample;
+      ke = sample_t / t_sample;
       sample_t = 0;
 
       pe = sample_pe / t_sample;
@@ -250,14 +270,12 @@ int main(int argc, char **argv){
       volume = 4 * boundxy * boundxy * boundz;
       n_per_v = n / volume;
       sample_t += kinetic_energy(vs, n);
-      sample_pe += potential_energy(box, ps, zone, b_side, n, g2, zero_point);
-      e = current_ke + pe;
+      e = ke + pe;
       PV = pressure * volume;
-      NkT = current_ke * 2.0 / 3.0;
+      NkT = ke * 2.0 / 3.0;
       beta = -pressure * (volume - particle_volume) + NkT;
       ratio = PV / NkT;
-      fprintf(kinetic, "%f %f %f %f %f %f %f\n", t, current_ke, pe, energy_added, e, ratio, beta);
-      last_ke = current_ke;
+      if (data != nullptr) fprintf(data, "%f %f %f %f %f %f %f\n", t, ke, pe, energy_added, e, ratio, beta);
 
       printf("%d\n", i);
       if (outfile == nullptr) continue;
@@ -275,7 +293,7 @@ int main(int argc, char **argv){
       }
       draw_box(boundxy, boundz, outfile);
       fprintf(outfile, "T -0.8 0.8\nt = %.2f\te = %f\tP = %f\tV = %f\nT -0.8 0.7\nPV = %f\t NkT = %f\t ratio = %f\n", dt * i, e, pressure, volume, PV, NkT, ratio);
-      fprintf(outfile, "T -0.8 0.6\nKE = %f\tPE = %f\tbeta = %f\n", current_ke, pe, beta);
+      fprintf(outfile, "T -0.8 0.6\nKE = %f\tPE = %f\tbeta = %f\n", ke, pe, beta);
       fprintf(outfile, "F\n");
     }
   }
