@@ -1,7 +1,8 @@
 #!/bin/bash
-cmd="./average"
+cmd="./average $2"
 for i in `seq 1 $1`
 do
     cmd="$cmd data$i.txt"
 done
+echo $cmd
 eval $cmd

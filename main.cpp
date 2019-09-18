@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<math.h>
 #include<string.h>
+#include<random>
 #include "Vec_lib.hpp"
 #include "Linked_lists.hpp"
 #include "Grid_lib.hpp"
@@ -10,6 +11,18 @@
 const double dt = 0.001;
 const double dthalf = dt / 2;
 extern const double r0half;
+
+void init_vel(V3d *vel, int n, double env_vel) {
+  std::default_random_engine gen;
+  std::normal_distribution<double> distri(0, 1);
+  double factor = env_vel / sqrt(3);
+  for (int i = 0; i < n; i++) {
+    vel[i].x = distri(gen) * factor;
+    vel[i].y = distri(gen) * factor;
+    vel[i].z = distri(gen) * factor;
+  }
+}
+
 int count_len(FILE *file, double &size){
   double dump;
   double dump2 = 0;
@@ -142,6 +155,7 @@ int main(int argc, char **argv){
   init_ps_links(pss, n);
   generate(ps, vs, ms, n, infile);
   init_grid(box, pss, ps, zone, b_side, gridsize, origin, n);
+  init_vel(vs, n, env_vel);
 
   //main loop
   for (int i = 0; i <= num_step; i++){
@@ -228,16 +242,16 @@ int main(int argc, char **argv){
       }
 
     }
-    if (ke > env_ke || t < 25)
-    for (int i = 0; i < n; i++){
-      double oldke = 0.5 * vs[i].lensqr();
-      double len = vs[i].len();
-      double factor = (env_vel - len) * conduct;
-      V3d dv = factor * vs[i];
-      vs[i].add(dv);
-      double newke =  0.5 * vs[i].lensqr();
-      energy_added += newke - oldke;
-    }
+    // if (ke > env_ke || t < 25)
+    // for (int i = 0; i < n; i++){
+    //   double oldke = 0.5 * vs[i].lensqr();
+    //   double len = vs[i].len();
+    //   double factor = (env_vel - len) * conduct;
+    //   V3d dv = factor * vs[i];
+    //   vs[i].add(dv);
+    //   double newke =  0.5 * vs[i].lensqr();
+    //   energy_added += newke - oldke;
+    // }
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++){
@@ -253,7 +267,7 @@ int main(int argc, char **argv){
       ps[i].add(d);
     }
 
-
+    //calculate average pressure
     if (i % p_sample == 0) {
       area =  8 * boundxy * boundxy + 8 * boundxy * boundz;
       pressure = impulse / p_sample / area;

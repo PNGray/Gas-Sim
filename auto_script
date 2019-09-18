@@ -5,6 +5,8 @@ v=$3
 for i in `seq 1 $4`;
 do
     echo $temp $i
-    eval "./a.out float_dense.txt null null data$i.txt 2 $v $v 0.01 $temp 200000 100 7"
+    cmd="./a.out float_dense.txt null null data$i.txt 2 $v $v 0.01 $temp $5 100 7"
+    echo $cmd
+    eval $cmd
     temp=`echo "$temp - $d" | bc -l`
 done
