@@ -60,7 +60,7 @@ void draw_box(double xy, double z, FILE *outfile) {
 
 int main(int argc, char **argv){
   if (argc < 13) {
-    printf("infile outfile savefile datafile pad sizexy sizey conduct envvel numstep spf numthreads\n");
+    printf("infile outfile savefile datafile pad sizexy sizez conduct envvel numstep spf numthreads\n");
     return 0;
   }
   //inputs variables
@@ -125,7 +125,7 @@ int main(int argc, char **argv){
 
   //environment variable
   double env_ke = n / 2.0 * env_vel * env_vel;
-  double gravity = -0.;
+  double gravity = -0.98;
   double e = 0;
   double ke = 0;
   double pe = 0;
@@ -155,7 +155,7 @@ int main(int argc, char **argv){
   init_ps_links(pss, n);
   generate(ps, vs, ms, n, infile);
   init_grid(box, pss, ps, zone, b_side, gridsize, origin, n);
-  init_vel(vs, n, env_vel);
+  // init_vel(vs, n, env_vel);
 
   //main loop
   for (int i = 0; i <= num_step; i++){
@@ -214,10 +214,12 @@ int main(int argc, char **argv){
         impulse += f;
         as[i].z += f;
         // double oldke = 0.5 * vs[i].lensqr();
-        // double len = vs[i].len();
-        // double factor = (env_vel - len) * conduct;
-        // V3d dv = factor * vs[i];
-        // vs[i].add(dv);
+
+        double len = vs[i].len();
+        double factor = (env_vel - len) * conduct; // inject heat if bounce of bottom
+        V3d dv = factor / len * vs[i];
+        vs[i].add(dv);
+
         // double newke =  0.5 * vs[i].lensqr();
         // #pragma omp critical
         // {
